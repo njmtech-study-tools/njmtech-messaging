@@ -83,22 +83,47 @@ pnpm --filter @njm/server test:e2e          # against a running `pnpm dev:server
 
 ## Deploy the backend (Cloudflare)
 
-```bash
-cd apps/server
-npx wrangler d1 create njm-messaging            # put database_id in wrangler.jsonc
-npx wrangler kv namespace create KV             # put id in wrangler.jsonc
-npx wrangler r2 bucket create njm-messaging-files
-npx wrangler r2 bucket lifecycle add njm-messaging-files expire-files files/ --expire-days 1
-pnpm db:migrate:remote
+Production runs on the **njmcloud** Cloudflare account at `https://njm-messaging.njmcloud-243.workers.dev`. The D1 database and KV namespace already exist and their ids are in `apps/server/wrangler.jsonc`.
 
-npx wrangler secret put JWT_SECRET              # long random string
-npx wrangler secret put RESEND_API_KEY          # https://resend.com, with a verified sending domain
-npx wrangler secret put VAPID_PUBLIC_KEY        # from `pnpm gen:vapid`
-npx wrangler secret put VAPID_PRIVATE_KEY
-npx wrangler secret put FCM_SERVICE_ACCOUNT     # Firebase service-account JSON (one line)
-# edit vars in wrangler.jsonc: EMAIL_FROM (on your Resend domain), VAPID_SUBJECT
-pnpm deploy
-```
+**Deploys run from GitHub.** `.github/workflows/deploy.yml` runs on every push to `main` that touches `apps/server/`, `packages/shared/` or the lockfile, and can also be started by hand ("Run workflow"). It:
+
+1. typechecks and tests the backend,
+2. bundles the Worker (dry run),
+3. applies pending D1 migrations (`migrations/*.sql`),
+4. deploys the Worker, uploading any GitHub-managed secrets with it,
+5. checks `/api/health`.
+
+Pull requests run tests and the bundle dry run in `ci.yml`. Production deploys are serialized and never cancelled midway.
+
+### Setup
+
+Create a Cloudflare API token (dashboard › My Profile › API Tokens › *Create Custom Token*) for the njmcloud account with:
+
+- Account › **Workers Scripts** › Edit
+- Account › **D1** › Edit
+- Account › **Workers KV Storage** › Edit
+- Account › **Workers R2 Storage** › Edit (for when R2 is enabled)
+- Account › **Account Settings** › Read
+- User › **Memberships** › Read
+
+Then add it to the repo, along with any optional settings:
+
+| Name | Kind | Purpose |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | secret | **required** for deploys |
+| `RESEND_API_KEY` | secret | sends OTP emails; sign-up doesn't work in production without it |
+| `FCM_SERVICE_ACCOUNT` | secret | Firebase service-account JSON, for Android push |
+| `EMAIL_FROM` | variable | sender, e.g. `Ephemeral <otp@yourdomain>` (must be a Resend-verified domain) |
+| `API_URL` | variable | Worker origin (already set). Used by app builds and the smoke test. |
+
+`JWT_SECRET` and `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` were generated once and live only in Cloudflare. Deploys never change them, because rotating them would sign everyone out or break push subscriptions.
+
+**R2 (attachments)** isn't enabled on the account yet. Until it is, `/api/files` returns `503 attachments_unavailable` and everything else works. To turn it on: enable R2 in the dashboard, run
+`wrangler r2 bucket create njm-messaging-files` and
+`wrangler r2 bucket lifecycle add njm-messaging-files expire-files files/ --expire-days 1`,
+uncomment `r2_buckets` in `wrangler.jsonc`, and push.
+
+Manual deploy from a laptop (rarely needed): `cd apps/server && pnpm db:migrate:remote && pnpm run deploy`.
 
 ## Releases (GitHub Actions)
 

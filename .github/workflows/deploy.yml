@@ -1,0 +1,97 @@
+name: Deploy backend
+
+# Deploys the Cloudflare Worker (and applies pending D1 migrations) whenever the
+# backend or shared protocol changes on main. Can also be run manually.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/server/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two production deploys/migrations at once, and never cancel one midway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.API_URL }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    defaults:
+      run:
+        working-directory: apps/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Check Cloudflare credentials
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Add the CLOUDFLARE_API_TOKEN repository secret (see README › Deploy the backend)"; exit 1
+          fi
+
+      - name: Typecheck and test
+        run: |
+          pnpm --filter @njm/shared --filter @njm/server typecheck
+          pnpm --filter @njm/shared --filter @njm/server test
+        working-directory: .
+
+      - name: Validate bundle
+        run: pnpm exec wrangler deploy --dry-run --outdir "$RUNNER_TEMP/bundle"
+
+      # Migrations are additive, so they run before the new code goes live.
+      - name: Apply D1 migrations
+        run: pnpm exec wrangler d1 migrations apply njm-messaging --remote
+
+      # Secrets managed in GitHub are uploaded with the deploy. Only non-empty ones are sent,
+      # and secrets already on the Worker (JWT_SECRET, VAPID_*) are never removed or changed.
+      - name: Collect GitHub-managed Worker secrets
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
+        run: |
+          umask 077
+          node -e '
+            const keys = ["RESEND_API_KEY", "FCM_SERVICE_ACCOUNT"];
+            const out = Object.fromEntries(keys.filter((k) => process.env[k]).map((k) => [k, process.env[k]]));
+            require("fs").writeFileSync(process.argv[1], JSON.stringify(out));
+            console.log("Uploading secrets:", Object.keys(out).join(", ") || "(none)");
+          ' "$RUNNER_TEMP/worker-secrets.json"
+
+      - name: Deploy Worker
+        env:
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+        run: |
+          ARGS=(--secrets-file "$RUNNER_TEMP/worker-secrets.json")
+          # Optional override of the sender address without editing wrangler.jsonc.
+          [ -n "$EMAIL_FROM" ] && ARGS+=(--var "EMAIL_FROM:$EMAIL_FROM")
+          pnpm exec wrangler deploy "${ARGS[@]}"
+          rm -f "$RUNNER_TEMP/worker-secrets.json"
+
+      - name: Smoke test
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          [ -z "$API_URL" ] && { echo "::warning::API_URL variable not set; skipping smoke test"; exit 0; }
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$API_URL/api/health" | grep -q '"ok":true'; then echo "healthy"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::$API_URL/api/health did not respond"; exit 1
