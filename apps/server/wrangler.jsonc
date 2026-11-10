@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "njm-messaging",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "INBOX", "class_name": "UserInbox" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserInbox"] }],
+  // Replace the ids below with the output of:
+  //   wrangler d1 create njm-messaging
+  //   wrangler kv namespace create KV
+  //   wrangler r2 bucket create njm-messaging-files
+  "d1_databases": [
+    { "binding": "DB", "database_name": "njm-messaging", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+  ],
+  "kv_namespaces": [{ "binding": "KV", "id": "00000000000000000000000000000000" }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "njm-messaging-files" }],
+  // Deletes orphaned encrypted attachments older than 24h.
+  "triggers": { "crons": ["*/30 * * * *"] },
+  "vars": {
+    "EMAIL_FROM": "Ephemeral <otp@example.com>",
+    "VAPID_SUBJECT": "mailto:admin@example.com",
+    "DEV_OTP_ECHO": "0",
+    "TEMPMAIL_API": "https://api.mail.tm"
+  }
+  // Secrets (wrangler secret put …): JWT_SECRET, RESEND_API_KEY,
+  // VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, FCM_SERVICE_ACCOUNT
+}

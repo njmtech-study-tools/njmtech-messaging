@@ -1,0 +1,13 @@
+{
+  "name": "njm-messaging",
+  "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "dev:server": "pnpm --filter @njm/server dev",
+    "dev:client": "pnpm --filter @njm/client dev",
+    "dev:desktop": "pnpm --filter @njm/desktop dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

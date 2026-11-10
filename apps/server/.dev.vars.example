@@ -1,0 +1,10 @@
+# Copy to .dev.vars for `wrangler dev`
+JWT_SECRET=change-me-to-a-long-random-string
+# Leave empty locally: OTPs are then echoed in the /api/auth/start response (DEV_OTP_ECHO=1)
+RESEND_API_KEY=
+DEV_OTP_ECHO=1
+# pnpm gen:vapid
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+# Firebase service account JSON on one line (for Android push)
+FCM_SERVICE_ACCOUNT=

@@ -1,0 +1,83 @@
+{
+  "name": "@njm/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ephemeral desktop app",
+  "main": "dist-electron/main.js",
+  "author": "NJM Tech",
+  "scripts": {
+    "build:main": "tsc -p .",
+    "build:web": "pnpm --filter @njm/client build",
+    "dev": "pnpm build:main && cross-env ELECTRON_DEV_URL=http://localhost:5173 electron .",
+    "start": "pnpm build:main && electron .",
+    "build": "pnpm build:web && pnpm build:main",
+    "dist": "pnpm build && electron-builder --publish never",
+    "dist:linux": "pnpm build && electron-builder --linux AppImage --publish never",
+    "dist:win": "pnpm build && electron-builder --win nsis --publish never",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "cross-env": "^10.0.0",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "~5.9.3"
+  },
+  "build": {
+    "appId": "tech.njm.ephemeral",
+    "productName": "Ephemeral",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../client/dist",
+        "to": "web"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network;InstantMessaging",
+      "icon": "../client/public/pwa-512x512.png",
+      "maintainer": "NJM Tech",
+      "artifactName": "Ephemeral-${version}-linux-${arch}.${ext}",
+      "executableName": "ephemeral"
+    },
+    "deb": {
+      "depends": [
+        "libnotify4",
+        "libxtst6",
+        "libnss3"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "../client/public/pwa-512x512.png",
+      "artifactName": "Ephemeral-${version}-windows-${arch}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.social-networking",
+      "icon": "../client/public/pwa-512x512.png"
+    }
+  }
+}

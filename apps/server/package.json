@@ -1,0 +1,27 @@
+{
+  "name": "@njm/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply njm-messaging --local",
+    "db:migrate:remote": "wrangler d1 migrations apply njm-messaging --remote",
+    "gen:vapid": "node scripts/gen-vapid.mjs",
+    "test": "vitest run src",
+    "test:e2e": "E2E_URL=${E2E_URL:-http://localhost:8787} vitest run e2e",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@njm/shared": "workspace:*",
+    "hono": "^4.10.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261101.0",
+    "@types/node": "^24.19.2",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.45.0"
+  }
+}

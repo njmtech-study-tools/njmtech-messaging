@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ephemeral</string>
+    <string name="title_activity_main">Ephemeral</string>
+    <string name="package_name">tech.njm.ephemeral</string>
+    <string name="custom_url_scheme">tech.njm.ephemeral</string>
+</resources>
