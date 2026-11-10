@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "njm-messaging",
+  "account_id": "243cad123070985195befb89ac8a02a5",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
   "observability": { "enabled": true },
@@ -13,7 +14,7 @@
   //   wrangler kv namespace create KV
   //   wrangler r2 bucket create njm-messaging-files
   "d1_databases": [
-    { "binding": "DB", "database_name": "njm-messaging", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "njm-messaging", "database_id": "adeeb755-daac-4966-9942-c34a47e588a3", "migrations_dir": "migrations" }
   ],
   "kv_namespaces": [{ "binding": "KV", "id": "00000000000000000000000000000000" }],
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "njm-messaging-files" }],
