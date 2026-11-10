@@ -300,7 +300,7 @@ authed.delete("/me", async (c) => {
   const db = c.env.DB;
   await c.env.INBOX.get(c.env.INBOX.idFromName(sub)).purge();
   const { results: files } = await db.prepare("SELECT DISTINCT file_id FROM file_targets WHERE owner_id = ?").bind(sub).all<{ file_id: string }>();
-  if (files.length) await c.env.FILES.delete(files.map((f) => `files/${f.file_id}`));
+  if (files.length && c.env.FILES) await c.env.FILES.delete(files.map((f) => `files/${f.file_id}`));
   await db.batch([
     db.prepare("DELETE FROM file_targets WHERE owner_id = ?").bind(sub),
     db.prepare("DELETE FROM devices WHERE user_id = ?").bind(sub),
@@ -375,6 +375,15 @@ authed.post("/push/register", async (c) => {
 
 /* ------------------------- Encrypted attachments (R2) ------------------------ */
 
+authed.use("/files/*", async (c, next) => {
+  if (!c.env.FILES) return c.json({ error: "attachments_unavailable" }, 503);
+  await next();
+});
+authed.use("/files", async (c, next) => {
+  if (!c.env.FILES) return c.json({ error: "attachments_unavailable" }, 503);
+  await next();
+});
+
 authed.post("/files", async (c) => {
   const { sub } = c.get("session");
   const targets = (c.req.header("X-File-Targets") ?? "").split(",").filter(Boolean).slice(0, 32);
@@ -382,7 +391,7 @@ authed.post("/files", async (c) => {
   const len = Number(c.req.header("Content-Length") ?? "0");
   if (!len || len > MAX_FILE_BYTES + 64) return c.json({ error: "too_large" }, 413);
   const id = newId(16);
-  await c.env.FILES.put(`files/${id}`, c.req.raw.body!, { customMetadata: { owner: sub } });
+  await c.env.FILES!.put(`files/${id}`, c.req.raw.body!, { customMetadata: { owner: sub } });
   const ts = now();
   await c.env.DB.batch(
     targets.map((d) =>
@@ -397,7 +406,7 @@ authed.get("/files/:id", async (c) => {
   const id = c.req.param("id");
   const t = await c.env.DB.prepare("SELECT 1 FROM file_targets WHERE file_id = ? AND device_id = ?").bind(id, did).first();
   if (!t) return c.json({ error: "not_found" }, 404);
-  const obj = await c.env.FILES.get(`files/${id}`);
+  const obj = await c.env.FILES!.get(`files/${id}`);
   if (!obj) return c.json({ error: "expired" }, 410);
   return new Response(obj.body, { headers: { "Content-Type": "application/octet-stream", "Cache-Control": "no-store" } });
 });
@@ -410,7 +419,7 @@ authed.post("/files/:id/ack", async (c) => {
   await db.prepare("UPDATE file_targets SET done = 1 WHERE file_id = ? AND device_id = ?").bind(id, did).run();
   const pending = await db.prepare("SELECT COUNT(*) AS n FROM file_targets WHERE file_id = ? AND done = 0").bind(id).first<number>("n");
   if (!pending) {
-    await c.env.FILES.delete(`files/${id}`);
+    await c.env.FILES!.delete(`files/${id}`);
     await db.prepare("DELETE FROM file_targets WHERE file_id = ?").bind(id).run();
   }
   return c.json({ ok: true });
@@ -437,6 +446,7 @@ async function handleWebSocket(req: Request, env: Env): Promise<Response> {
 /* ------------------------------ Scheduled sweep ----------------------------- */
 
 async function sweepFiles(env: Env) {
+  if (!env.FILES) return;
   const cutoff = now() - FILE_MAX_AGE_MS;
   const { results } = await env.DB.prepare("SELECT DISTINCT file_id FROM file_targets WHERE created_at < ? LIMIT 500")
     .bind(cutoff)

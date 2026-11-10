@@ -16,13 +16,16 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "njm-messaging", "database_id": "adeeb755-daac-4966-9942-c34a47e588a3", "migrations_dir": "migrations" }
   ],
-  "kv_namespaces": [{ "binding": "KV", "id": "00000000000000000000000000000000" }],
-  "r2_buckets": [{ "binding": "FILES", "bucket_name": "njm-messaging-files" }],
+  "kv_namespaces": [{ "binding": "KV", "id": "9c14b75190124a4eb8ef5004379b6c22" }],
+  // R2 isn't enabled on this account yet (dashboard › R2). Once it is, create the bucket and uncomment:
+  //   wrangler r2 bucket create njm-messaging-files
+  //   wrangler r2 bucket lifecycle add njm-messaging-files expire-files files/ --expire-days 1
+  // "r2_buckets": [{ "binding": "FILES", "bucket_name": "njm-messaging-files" }],
   // Deletes orphaned encrypted attachments older than 24h.
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {
     "EMAIL_FROM": "Ephemeral <otp@example.com>",
-    "VAPID_SUBJECT": "mailto:admin@example.com",
+    "VAPID_SUBJECT": "https://github.com/njmtech-study-tools/njmtech-messaging",
     "DEV_OTP_ECHO": "0",
     "TEMPMAIL_API": "https://api.mail.tm"
   }
