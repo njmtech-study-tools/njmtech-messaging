@@ -3,7 +3,7 @@
 Private, anonymous messaging for **Android (Ionic/Capacitor APK)**, **desktop (Electron)** and **web (PWA)** — one React codebase.
 
 - **No message storage on servers.** Messages are end-to-end encrypted on the device. The relay (a Cloudflare Durable Object per user) only holds ciphertext for offline devices and deletes it the moment the device acks, or after 7 days at most. Messages live only in each device's IndexedDB.
-- **Anonymous accounts via temp mail.** On sign-up the app creates a disposable inbox (mail.tm), the server emails a one-time code to it, and the app reads the code from the inbox automatically. No phone number or real email.
+- **Anonymous accounts via temp mail.** On sign-up the app creates a disposable, password-protected inbox (`inbox+<random>@njmtech.co.za`, hosted by the Worker itself), the server emails a one-time code to it, and the app reads the code from the inbox automatically. No phone number or real email.
 - **Notifications on every installed device.** FCM on Android, Web Push on the PWA, and a tray-resident Electron app with native notifications. Push payloads never contain message content; they're just a "new message" wake-up.
 - **Features:** 1:1 chats, encrypted images/files, disappearing-message timers, multi-device (each device has its own keys, and your other devices get a copy), weekly key rotation with signed envelopes, recovery codes, device linking, automatic temp-inbox replacement, device management, account deletion.
 
@@ -47,12 +47,12 @@ Every message is encrypted separately for each recipient device. It uses a **fre
 
 The relay still sees metadata (who talks to whom, when).
 
-### When mail.tm deletes the inbox
+### When the inbox is gone
 
 Temp inboxes are disposable, so the account never depends on one:
 
 1. **Recovery code.** A 100-bit code is issued at sign-up and shown in the recovery kit. *Welcome › Restore with recovery code* (handle + code) signs in **without any email**. Codes are single-use, so a new one is issued each time one is used. You can also regenerate it in Settings.
-2. **Automatic inbox replacement.** Once a day a signed-in device checks that its inbox still exists. If mail.tm has deleted it, the device creates a new inbox, rebinds the account to it (OTP-verified via `/api/me/email/*`) and shares the new credentials with your other devices over E2E sync. If two devices replace it at the same moment, they converge on the address the server last verified. *Settings › Check* does the same on demand.
+2. **Automatic inbox replacement.** Once a day a signed-in device checks that its inbox still exists. If it is gone (for example an old mail.tm inbox from before inboxes were self-hosted), the device creates a new inbox, rebinds the account to it (OTP-verified via `/api/me/email/*`) and shares the new credentials with your other devices over E2E sync. If two devices replace it at the same moment, they converge on the address the server last verified. *Settings › Check* does the same on demand.
 3. **Device linking.** *Settings › Link a new device* shows a 10-minute, single-use code. On the new device, *Welcome › Link to my other device* signs in with that code, and the existing device sends it the inbox credentials and recovery code end-to-end encrypted.
 
 The only unrecoverable case is losing **every** device **and** the recovery code.
@@ -127,6 +127,18 @@ Then add it to the repo, along with any optional settings:
 uncomment `r2_buckets` in `wrangler.jsonc`, and push.
 
 Manual deploy from a laptop (rarely needed): `cd apps/server && pnpm db:migrate:remote && pnpm run deploy`.
+
+### Disposable inboxes
+
+mail.tm blocks requests from Cloudflare Workers, so the Worker hosts the inboxes itself behind the same mail.tm-style API (`/api/tempmail/*`, `apps/server/src/mailbox.ts`):
+
+```
+Resend → inbox+<tag>@njmtech.co.za → Email Routing on njmtech.co.za (subaddressing on, rule inbox@ → Worker)
+       → ephemeral-mail-relay (apps/mail-relay, in the account that owns njmtech.co.za)
+       → POST /api/inbound-email (X-Inbound-Secret) → D1
+```
+
+Only the subject and a 200-character text preview are stored, messages are deleted after 24 hours, and inboxes that aren't an account's email are deleted after a day. `INBOUND_EMAIL_SECRET` (Worker) and `INBOUND_SECRET` (relay) are the same value, from Infisical. Deploy the relay with `CLOUDFLARE_RELAY_API_TOKEN` (see `apps/mail-relay/wrangler.jsonc`).
 
 ## Releases (GitHub Actions)
 

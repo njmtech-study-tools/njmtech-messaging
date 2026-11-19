@@ -1,3 +1,4 @@
+import type { Env } from "./env";
 import { fromB64Url, toB64Url, utf8, fromUtf8, randomBytes } from "@njm/shared/encoding";
 
 export const now = () => Date.now();
@@ -54,4 +55,12 @@ export function generateOtp(): string {
   do crypto.getRandomValues(buf);
   while (buf[0] >= limit);
   return (buf[0] % 1_000_000).toString().padStart(6, "0");
+}
+
+/** Fixed-window counter in KV. Returns false once `max` is exceeded within the window. */
+export async function rateLimit(env: Env, key: string, max: number, windowSec: number): Promise<boolean> {
+  const n = Number((await env.KV.get(`rl:${key}`)) ?? "0");
+  if (n >= max) return false;
+  await env.KV.put(`rl:${key}`, String(n + 1), { expirationTtl: Math.max(60, windowSec) });
+  return true;
 }

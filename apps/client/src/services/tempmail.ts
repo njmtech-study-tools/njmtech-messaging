@@ -1,6 +1,7 @@
 /**
- * Disposable inbox provisioning (mail.tm-compatible API, proxied through our Worker
- * because the upstream API has no CORS for third-party origins).
+ * Disposable inbox provisioning through our Worker's mail.tm-compatible API
+ * (apps/server/src/mailbox.ts). The Worker hosts the inboxes itself; mail.tm blocks
+ * Cloudflare Workers.
  */
 import { API_URL } from "../config";
 import type { MailboxCreds } from "./storage";
@@ -18,7 +19,7 @@ async function call<T>(path: string, init: RequestInit = {}, mailToken?: string)
   if (init.body) headers.set("Content-Type", "application/json");
   if (mailToken) headers.set("X-Mail-Authorization", `Bearer ${mailToken}`);
   let res = await fetch(`${BASE()}${path}`, { ...init, headers });
-  // mail.tm rate-limits per IP (429) and occasionally blips (5xx): back off and retry.
+  // Rate limits (429) and occasional blips (5xx): back off and retry.
   const transient = (r: Response) => r.status === 429 || r.status === 502 || r.status === 503 || r.status === 504;
   for (let attempt = 0; transient(res) && attempt < 5; attempt++) {
     const retryAfter = Number(res.headers.get("Retry-After"));
@@ -50,11 +51,12 @@ export interface Mailbox extends MailboxCreds {
 }
 
 export async function createMailbox(): Promise<Mailbox> {
-  const domains = members<{ domain: string; isActive: boolean }>(await call("/domains")).filter((d) => d.isActive);
+  const domains = members<{ domain: string; isActive: boolean; prefix?: string }>(await call("/domains")).filter((d) => d.isActive);
   if (!domains.length) throw new Error("No temp-mail domains available right now.");
   for (let attempt = 0; ; attempt++) {
-    const domain = domains[Math.floor(Math.random() * domains.length)].domain;
-    const creds = { address: `${randomLocalPart()}@${domain}`, password: randomPassword() };
+    const { domain, prefix = "" } = domains[Math.floor(Math.random() * domains.length)];
+    // e.g. inbox+e3k9…@njmtech.co.za (the server's Email Routing rule matches inbox@ via subaddressing).
+    const creds = { address: `${prefix}${randomLocalPart()}@${domain}`, password: randomPassword() };
     try {
       await call("/accounts", { method: "POST", body: JSON.stringify(creds) });
     } catch (e) {

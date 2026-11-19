@@ -25,14 +25,16 @@
   //   wrangler r2 bucket create njm-messaging-files
   //   wrangler r2 bucket lifecycle add njm-messaging-files expire-files files/ --expire-days 1
   // "r2_buckets": [{ "binding": "FILES", "bucket_name": "njm-messaging-files" }],
-  // Deletes orphaned encrypted attachments older than 24h.
+  // Deletes orphaned encrypted attachments older than 24h, and inbox mail older than 24h.
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {
     "EMAIL_FROM": "Ephemeral <noreply@njmtech.co.za>",
     "VAPID_SUBJECT": "https://github.com/njmtech-study-tools/njmtech-messaging",
     "DEV_OTP_ECHO": "0",
-    "TEMPMAIL_API": "https://api.mail.tm"
+    // Disposable inboxes are inbox+<tag>@njmtech.co.za, delivered by apps/mail-relay.
+    "INBOX_DOMAIN": "njmtech.co.za",
+    "INBOX_LOCAL": "inbox"
   }
   // Secrets (wrangler secret put …): JWT_SECRET, RESEND_API_KEY,
-  // VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, FCM_SERVICE_ACCOUNT
+  // VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, FCM_SERVICE_ACCOUNT, INBOUND_EMAIL_SECRET
 }

@@ -14,7 +14,11 @@ export interface Env {
   VAPID_PRIVATE_KEY?: string;
   VAPID_SUBJECT: string;
   FCM_SERVICE_ACCOUNT?: string;
-  TEMPMAIL_API?: string;
+  /** Disposable inboxes: inbox+<tag>@INBOX_DOMAIN (see mailbox.ts). */
+  INBOX_DOMAIN?: string;
+  INBOX_LOCAL?: string;
+  /** Shared with the mail-relay Worker that posts incoming mail to /api/inbound-email. */
+  INBOUND_EMAIL_SECRET?: string;
 }
 
 export interface Session {

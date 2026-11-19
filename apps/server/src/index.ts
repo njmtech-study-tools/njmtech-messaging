@@ -9,8 +9,9 @@ import { normalizeCode, randomCode, verifyPrekey } from "@njm/shared/crypto";
 import type { Env, Session } from "./env";
 import { checkOtp, consumeOtp, issueOtp } from "./otp";
 import { sendOtpEmail } from "./email";
+import { inboundEmail, sweepMailboxes, tempmail } from "./mailbox";
 import { pushDevice, type PushTarget } from "./push";
-import { newId, now, sha256Hex, signJwt, timingSafeEqual, verifyJwt } from "./util";
+import { newId, now, rateLimit, sha256Hex, signJwt, timingSafeEqual, verifyJwt } from "./util";
 
 export { UserInbox } from "./inbox-do";
 
@@ -31,43 +32,10 @@ app.onError((err, c) => {
 
 app.get("/health", (c) => c.json({ ok: true }));
 
-/* ------------------------------ Temp-mail proxy ----------------------------- */
-// mail.tm-compatible APIs don't send CORS headers for third-party origins, so the
-// client reaches them through this allow-listed pass-through (no storage, no logging).
-const TEMPMAIL_ROUTES: [string, RegExp][] = [
-  ["GET", /^\/domains$/],
-  ["POST", /^\/accounts$/],
-  ["POST", /^\/token$/],
-  ["GET", /^\/messages$/],
-  ["GET", /^\/messages\/[A-Za-z0-9]+$/],
-  ["DELETE", /^\/accounts\/[A-Za-z0-9]+$/],
-];
-
-app.all("/tempmail/*", async (c) => {
-  const path = c.req.path.replace(/^\/api\/tempmail/, "");
-  if (!TEMPMAIL_ROUTES.some(([m, re]) => m === c.req.method && re.test(path))) return c.json({ error: "not_allowed" }, 404);
-  const body = c.req.method === "POST" ? await c.req.text() : undefined;
-  if (body && body.length > 4096) return c.json({ error: "too_large" }, 413);
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (body) headers["Content-Type"] = "application/json";
-  const authz = c.req.header("X-Mail-Authorization");
-  if (authz) headers.Authorization = authz;
-  let upstream: Response;
-  try {
-    upstream = await fetch(`${c.env.TEMPMAIL_API ?? "https://api.mail.tm"}${path}`, { method: c.req.method, headers, body });
-  } catch (e) {
-    console.warn("tempmail upstream unreachable", e);
-    return c.json({ error: "tempmail_unreachable" }, 502);
-  }
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: {
-      "Content-Type": upstream.headers.get("Content-Type") ?? "application/json",
-      "Cache-Control": "no-store",
-      ...(upstream.headers.get("Retry-After") ? { "Retry-After": upstream.headers.get("Retry-After")! } : {}),
-    },
-  });
-});
+/* ---------------------------- Disposable inboxes ---------------------------- */
+// Self-hosted, mail.tm-compatible (see mailbox.ts). mail.tm blocks Cloudflare Workers.
+app.route("/tempmail", tempmail);
+app.route("/inbound-email", inboundEmail);
 
 /* ---------------------------------- Auth ---------------------------------- */
 
@@ -103,14 +71,6 @@ app.get("/handles/:handle", async (c) => {
 const LINK_TTL = 600;
 
 const hashCode = (code: string) => sha256Hex(`recovery:${normalizeCode(code)}`);
-
-/** Fixed-window counter in KV. Returns false once `max` is exceeded within the window. */
-async function rateLimit(env: Env, key: string, max: number, windowSec: number): Promise<boolean> {
-  const n = Number((await env.KV.get(`rl:${key}`)) ?? "0");
-  if (n >= max) return false;
-  await env.KV.put(`rl:${key}`, String(n + 1), { expirationTtl: Math.max(60, windowSec) });
-  return true;
-}
 
 async function issueRecoveryCode(env: Env, userId: string): Promise<string> {
   const code = randomCode(4);
@@ -487,5 +447,6 @@ export default {
   },
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(sweepFiles(env));
+    ctx.waitUntil(sweepMailboxes(env));
   },
 } satisfies ExportedHandler<Env>;

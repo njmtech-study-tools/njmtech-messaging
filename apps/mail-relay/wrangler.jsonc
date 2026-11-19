@@ -1,0 +1,20 @@
+// Mail relay: Email Routing on njmtech.co.za → njm-messaging /api/inbound-email.
+// Deployed to the account that owns njmtech.co.za (not njm-messaging's account), from apps/server:
+//   CLOUDFLARE_API_TOKEN=$(infisical secrets get CLOUDFLARE_RELAY_API_TOKEN --env=prod --plain) \
+//     pnpm exec wrangler deploy -c ../mail-relay/wrangler.jsonc
+//   pnpm exec wrangler secret put INBOUND_SECRET -c ../mail-relay/wrangler.jsonc   (= INBOUND_EMAIL_SECRET)
+// Email Routing › Settings › Subaddressing must be on, so inbox+<tag>@ matches the inbox@ rule.
+{
+  "$schema": "../server/node_modules/wrangler/config-schema.json",
+  "name": "ephemeral-mail-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "account_id": "c2db456075f9ab9579ff7bb76674a984",
+  "workers_dev": false,
+  "observability": { "enabled": true },
+  // The Email Routing rule inbox@njmtech.co.za → this Worker was created with the zone API
+  // (the deploy token can't use Wrangler's account-level "addresses" rules API).
+  "vars": {
+    "INBOUND_URL": "https://njm-messaging.njmcloud-243.workers.dev/api/inbound-email"
+  }
+}
