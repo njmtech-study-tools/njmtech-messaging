@@ -4,14 +4,14 @@ import { sendWebPush } from "./webpush";
 
 async function vapid() {
   const kp = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"])) as CryptoKeyPair;
-  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
-  const jwk = await crypto.subtle.exportKey("jwk", kp.privateKey);
+  const raw = new Uint8Array((await crypto.subtle.exportKey("raw", kp.publicKey)) as ArrayBuffer);
+  const jwk = (await crypto.subtle.exportKey("jwk", kp.privateKey)) as JsonWebKey;
   return { publicKey: toB64Url(raw), privateKey: jwk.d!, subject: "mailto:test@example.com" };
 }
 
 async function browserKeys() {
   const kp = (await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])) as CryptoKeyPair;
-  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
+  const raw = new Uint8Array((await crypto.subtle.exportKey("raw", kp.publicKey)) as ArrayBuffer);
   return { p256dh: toB64Url(raw), auth: toB64Url(crypto.getRandomValues(new Uint8Array(16))) };
 }
 
