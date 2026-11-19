@@ -9,6 +9,10 @@
     "bindings": [{ "name": "INBOX", "class_name": "UserInbox" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserInbox"] }],
+  // The PWA, served from the same origin as the API (build it first: pnpm --filter @njm/client build).
+  // Static files are matched first; everything else (/api/*) reaches the Worker. The client uses hash
+  // routing, so no SPA fallback is needed.
+  "assets": { "directory": "../client/dist" },
   // Replace the ids below with the output of:
   //   wrangler d1 create njm-messaging
   //   wrangler kv namespace create KV

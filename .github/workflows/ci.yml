@@ -18,6 +18,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
       - run: pnpm -r test
+      - name: Build PWA (served by the Worker)
+        run: VITE_API_URL= pnpm --filter @njm/client build
       - name: Validate Worker bundle
         working-directory: apps/server
         run: pnpm exec wrangler deploy --dry-run --outdir "$RUNNER_TEMP/bundle"

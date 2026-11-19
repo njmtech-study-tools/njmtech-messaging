@@ -106,6 +106,9 @@ Create a Cloudflare API token (dashboard › My Profile › API Tokens › *Crea
 - Account › **Account Settings** › Read
 - User › **Memberships** › Read
 
+Secrets live in Infisical (`env-vault` › `/njmtech-messaging`; `prod` for deploy values). GitHub holds a copy, so after changing a value in Infisical (`env-set KEY --env prod`), push it to the repo with
+`scripts/sync-github-secrets.sh` (`-n` for a dry run). It covers every secret and variable in the tables below.
+
 Then add it to the repo, along with any optional settings:
 
 | Name | Kind | Purpose |
@@ -155,13 +158,13 @@ One-time setup (repo **Settings › Secrets and variables › Actions**):
 | `GOOGLE_SERVICES_JSON` | secret | contents of Firebase `google-services.json` (for push) |
 | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | secret, optional | Windows code-signing certificate (base64 .pfx) + password |
 
-Create the release keystore once with `scripts/gen-android-keystore.sh`. **Back up the `.jks` file and password.** Android only accepts updates signed with the same key.
+Create the release keystore once with `scripts/gen-android-keystore.sh`. **Back up the `.jks` file and password.** They're in Infisical (`prod`: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, …); restore the file with `infisical secrets get ANDROID_KEYSTORE_BASE64 --env=prod --plain | base64 -d > ephemeral-release.jks`. Android only accepts updates signed with the same key.
 
 ## Build the apps
 
 Set `VITE_API_URL` to the deployed Worker origin (for example `https://njm-messaging.<you>.workers.dev`) in `apps/client/.env.production`.
 
-**Web / PWA.** Run `pnpm --filter @njm/client build`, then host `apps/client/dist` on any static host (Cloudflare Pages: `npx wrangler pages deploy apps/client/dist`). It installs as a PWA and receives Web Push.
+**Web / PWA.** The Worker serves it from the same origin as the API (`assets` in `wrangler.jsonc`), so every deploy of the backend also ships the PWA at `API_URL`. Build it with an empty `VITE_API_URL` (`VITE_API_URL= pnpm --filter @njm/client build`) before `wrangler deploy` or `wrangler dev`. It installs as a PWA and receives Web Push.
 
 **Android APK.** You need the Android SDK (Android Studio) and a Firebase project:
 1. In Firebase, add an Android app with package `tech.njm.ephemeral` and download `google-services.json` to `apps/client/android/app/`. It is gitignored.

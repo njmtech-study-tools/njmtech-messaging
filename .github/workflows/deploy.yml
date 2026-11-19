@@ -1,12 +1,14 @@
-name: Deploy backend
+name: Deploy backend + PWA
 
 # Deploys the Cloudflare Worker (and applies pending D1 migrations) whenever the
-# backend or shared protocol changes on main. Can also be run manually.
+# backend, PWA or shared protocol changes on main. The Worker also serves the PWA
+# (apps/client/dist) from the same origin. Can also be run manually.
 on:
   push:
     branches: [main]
     paths:
       - "apps/server/**"
+      - "apps/client/**"
       - "packages/shared/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/deploy.yml"
@@ -49,8 +51,13 @@ jobs:
 
       - name: Typecheck and test
         run: |
-          pnpm --filter @njm/shared --filter @njm/server typecheck
-          pnpm --filter @njm/shared --filter @njm/server test
+          pnpm --filter @njm/shared --filter @njm/server --filter @njm/client typecheck
+          pnpm --filter @njm/shared --filter @njm/server --filter @njm/client test
+        working-directory: .
+
+      # Empty VITE_API_URL: the PWA talks to the Worker on its own origin.
+      - name: Build PWA
+        run: VITE_API_URL= pnpm --filter @njm/client build
         working-directory: .
 
       - name: Validate bundle
@@ -95,3 +102,11 @@ jobs:
             sleep 5
           done
           echo "::error::$API_URL/api/health did not respond"; exit 1
+
+      - name: Smoke test PWA
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          [ -z "$API_URL" ] && exit 0
+          curl -fsS "$API_URL/" | grep -q '<div id="root"\|manifest' || { echo "::error::$API_URL/ is not serving the PWA"; exit 1; }
+          curl -fsS -o /dev/null "$API_URL/sw.js" || { echo "::error::$API_URL/sw.js missing"; exit 1; }
