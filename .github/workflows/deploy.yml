@@ -108,5 +108,9 @@ jobs:
           API_URL: ${{ vars.API_URL }}
         run: |
           [ -z "$API_URL" ] && exit 0
-          curl -fsS "$API_URL/" | grep -q '<div id="root"\|manifest' || { echo "::error::$API_URL/ is not serving the PWA"; exit 1; }
-          curl -fsS -o /dev/null "$API_URL/sw.js" || { echo "::error::$API_URL/sw.js missing"; exit 1; }
+          # New assets can take a few seconds to propagate after a deploy.
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "$API_URL/" | grep -q 'id="root"' && curl -fsS -o /dev/null "$API_URL/sw.js"; then echo "PWA served"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::$API_URL/ or /sw.js is not serving the PWA"; exit 1
