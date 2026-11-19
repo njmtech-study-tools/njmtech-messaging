@@ -1,6 +1,6 @@
 /** Firebase Cloud Messaging HTTP v1 for the Android (Capacitor) app. */
 import { toB64Url, utf8 } from "@njm/shared/encoding";
-import type { PushResult } from "./webpush";
+import { NEW_MESSAGE, type PushNotification, type PushResult } from "./webpush";
 
 interface ServiceAccount {
   project_id: string;
@@ -51,7 +51,11 @@ async function accessToken(sa: ServiceAccount): Promise<string> {
   return json.access_token;
 }
 
-export async function sendFcm(serviceAccountJson: string, token: string): Promise<PushResult> {
+export async function sendFcm(
+  serviceAccountJson: string,
+  token: string,
+  n: PushNotification = NEW_MESSAGE,
+): Promise<PushResult> {
   const sa = JSON.parse(serviceAccountJson) as ServiceAccount;
   const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
     method: "POST",
@@ -60,12 +64,12 @@ export async function sendFcm(serviceAccountJson: string, token: string): Promis
       message: {
         token,
         // No message content ever leaves the relay — this is only a wake-up.
-        notification: { title: "New message", body: "Open Ephemeral to read it" },
-        data: { type: "msg" },
+        notification: { title: n.title, body: n.body },
+        data: { type: n.tag === NEW_MESSAGE.tag ? "msg" : n.tag },
         android: {
           priority: "HIGH",
-          collapse_key: "new-message",
-          notification: { channel_id: "messages", tag: "new-message" },
+          collapse_key: n.tag,
+          notification: { channel_id: "messages", tag: n.tag },
         },
       },
     }),

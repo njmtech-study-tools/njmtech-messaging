@@ -9,6 +9,7 @@ import { normalizeCode, randomCode, verifyPrekey } from "@njm/shared/crypto";
 import type { Env, Session } from "./env";
 import { checkOtp, consumeOtp, issueOtp } from "./otp";
 import { sendOtpEmail } from "./email";
+import { pushDevice, type PushTarget } from "./push";
 import { newId, now, sha256Hex, signJwt, timingSafeEqual, verifyJwt } from "./util";
 
 export { UserInbox } from "./inbox-do";
@@ -379,6 +380,20 @@ authed.post("/push/register", async (c) => {
     .bind(kind, data, now(), did)
     .run();
   return c.json({ ok: true });
+});
+
+/** Sends a test notification to this device, so the user sees push working right after enabling it. */
+authed.post("/push/test", async (c) => {
+  const { did } = c.get("session");
+  const d = await c.env.DB.prepare("SELECT id, push_kind, push_data FROM devices WHERE id = ?").bind(did).first<PushTarget>();
+  if (!d?.push_kind) return c.json({ error: "not_registered" }, 409);
+  const result = await pushDevice(c.env, d, {
+    title: "Notifications are on",
+    body: "You'll get a notification here when a new message arrives.",
+    tag: "push-test",
+    always: true,
+  });
+  return c.json({ ok: result === "ok", result });
 });
 
 /* ------------------------- Encrypted attachments (R2) ------------------------ */

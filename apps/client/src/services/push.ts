@@ -3,7 +3,29 @@ import { fromB64Url } from "@njm/shared";
 import { platform } from "../config";
 import { api } from "./api";
 
-export type PushState = "enabled" | "denied" | "unavailable" | "disabled";
+/**
+ * "ios-install": iPhone/iPad in a Safari tab. iOS only allows web push for apps added to the
+ * Home Screen (iOS 16.4+). "ios-update": installed on the Home Screen, but iOS is older than 16.4.
+ */
+export type PushState = "enabled" | "denied" | "unavailable" | "disabled" | "ios-install" | "ios-update";
+
+export function isIos(): boolean {
+  // iPadOS reports itself as a Mac; touch support gives it away.
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+/** Opened from the Home Screen (installed) rather than a browser tab. */
+export function isStandalone(): boolean {
+  return (
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+/** Sends a test notification to this device. Best effort. */
+export async function sendTestPush(): Promise<void> {
+  await api("/push/test", { method: "POST" }).catch(() => {});
+}
 
 /** Registers this device for content-free "new message" wake-ups. */
 export async function enablePush(): Promise<PushState> {
@@ -27,7 +49,12 @@ export async function disablePush(): Promise<void> {
 }
 
 async function enableWeb(): Promise<PushState> {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unavailable";
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    if (isIos()) return isStandalone() ? "ios-update" : "ios-install";
+    return "unavailable";
+  }
+  // Ask first, while still inside the tap: Safari (iOS) drops the prompt if anything
+  // asynchronous runs before it.
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "denied";
   const { publicKey } = await api<{ publicKey: string | null }>("/push/vapid");

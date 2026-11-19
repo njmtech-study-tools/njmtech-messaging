@@ -7,7 +7,7 @@ import { currentPrekey, fingerprint, PREKEY_ROTATE_MS } from "@njm/shared";
 import { api } from "../services/api";
 import { recoveryKit } from "../services/auth";
 import { checkInbox, replaceInbox } from "../services/inbox";
-import { disablePush, enablePush } from "../services/push";
+import { disablePush, enablePush, sendTestPush } from "../services/push";
 import type { Identity } from "../services/storage";
 import { useSession } from "../session";
 import { shortTime, TIMER_OPTIONS } from "../util";
@@ -69,10 +69,15 @@ export default function Settings() {
     if (on) {
       const state = await enablePush().catch(() => "unavailable" as const);
       if (state !== "enabled") {
-        void toast({
-          message: state === "denied" ? "Notifications are blocked in system settings." : "Push isn't available on this device.",
-          duration: 3000,
-        });
+        const message = {
+          denied: "Notifications are blocked in system settings.",
+          "ios-install": "On iPhone, tap Share › Add to Home Screen, open Ephemeral from there, then turn notifications on.",
+          "ios-update": "Notifications need iOS 16.4 or later.",
+        }[state as string] ?? "Push isn't available on this device.";
+        void toast({ message, duration: state.startsWith("ios") ? 6000 : 3000 });
+      } else {
+        // Like the wealth-board app: confirm with a real notification.
+        void sendTestPush();
       }
       await updatePrefs({ notifications: state === "enabled" });
     } else {

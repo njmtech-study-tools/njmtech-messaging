@@ -14,6 +14,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
     "@njm/shared": "workspace:*",
     "hono": "^4.10.0"
   },
