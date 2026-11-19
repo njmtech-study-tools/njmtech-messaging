@@ -96,6 +96,8 @@ jobs:
             echo "::warning::GOOGLE_SERVICES_JSON secret not set — the APK will build but push notifications won't work"
           else
             printf '%s' "$GOOGLE_SERVICES_JSON" > apps/client/android/app/google-services.json
+            # Lets the app call FCM register() (it crashes natively without Firebase config).
+            echo "VITE_FCM_ENABLED=1" >> "$GITHUB_ENV"
           fi
 
       - name: Decode signing keystore

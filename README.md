@@ -167,7 +167,7 @@ Set `VITE_API_URL` to the deployed Worker origin (for example `https://njm-messa
 **Web / PWA.** The Worker serves it from the same origin as the API (`assets` in `wrangler.jsonc`), so every deploy of the backend also ships the PWA at `API_URL`. Build it with an empty `VITE_API_URL` (`VITE_API_URL= pnpm --filter @njm/client build`) before `wrangler deploy` or `wrangler dev`. It installs as a PWA and receives Web Push.
 
 **Android APK.** You need the Android SDK (Android Studio) and a Firebase project:
-1. In Firebase, add an Android app with package `tech.njm.ephemeral` and download `google-services.json` to `apps/client/android/app/`. It is gitignored.
+1. In Firebase, add an Android app with package `tech.njm.ephemeral` and download `google-services.json` to `apps/client/android/app/`. It is gitignored. Also build with `VITE_FCM_ENABLED=1` (the release workflow sets it when the `GOOGLE_SERVICES_JSON` secret exists); without it the app reports push as unavailable instead of calling FCM, which crashes without Firebase config.
 2. Run `pnpm --filter @njm/client android:apk`. The output is `apps/client/android/app/build/outputs/apk/debug/app-debug.apk`.
    For a release build, run `pnpm --filter @njm/client android:open` and use *Build › Generate Signed Bundle/APK*.
 3. Debug builds allow cleartext HTTP, so an emulator can reach a local Worker at `VITE_API_URL=http://10.0.2.2:8787`.

@@ -71,6 +71,9 @@ async function enableWeb(): Promise<PushState> {
 let androidListeners = false;
 
 async function enableAndroid(): Promise<PushState> {
+  // Set by the release build only when google-services.json is present. Without Firebase,
+  // PushNotifications.register() throws natively ("Default FirebaseApp is not initialized").
+  if (import.meta.env.VITE_FCM_ENABLED !== "1") return "unavailable";
   let perm = await PushNotifications.checkPermissions();
   if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") perm = await PushNotifications.requestPermissions();
   if (perm.receive !== "granted") return "denied";
