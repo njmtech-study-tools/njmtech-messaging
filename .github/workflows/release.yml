@@ -81,6 +81,9 @@ jobs:
           java-version: 21
           cache: gradle
       - uses: android-actions/setup-android@v3
+        with:
+          # The default also installs the long-removed "tools" package, which now fails.
+          packages: platform-tools
 
       - run: pnpm install --frozen-lockfile
 

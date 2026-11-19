@@ -26,6 +26,7 @@
   "build": {
     "appId": "tech.njm.ephemeral",
     "productName": "Ephemeral",
+    "publish": null,
     "npmRebuild": false,
     "directories": {
       "output": "release"
