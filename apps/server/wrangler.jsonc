@@ -28,7 +28,7 @@
   // Deletes orphaned encrypted attachments older than 24h.
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {
-    "EMAIL_FROM": "Ephemeral <otp@example.com>",
+    "EMAIL_FROM": "Ephemeral <noreply@njmtech.co.za>",
     "VAPID_SUBJECT": "https://github.com/njmtech-study-tools/njmtech-messaging",
     "DEV_OTP_ECHO": "0",
     "TEMPMAIL_API": "https://api.mail.tm"

@@ -82,7 +82,11 @@ app.post("/auth/start", async (c) => {
     if (c.env.RESEND_API_KEY) await sendOtpEmail(c.env, email, r.code);
     return c.json({ ok: true, existing: !!exists, devCode: r.code });
   }
-  await sendOtpEmail(c.env, email, r.code);
+  const sent = await sendOtpEmail(c.env, email, r.code);
+  if (!sent.sent && sent.reason === "api_error") {
+    console.error("OTP email failed", sent.message);
+    return c.json({ error: "email_failed" }, 502);
+  }
   return c.json({ ok: true, existing: !!exists });
 });
 
@@ -253,7 +257,11 @@ authed.post("/me/email/start", async (c) => {
   const r = await issueOtp(c.env, email);
   if ("error" in r) return c.json({ error: "cooldown" }, 429);
   if (c.env.DEV_OTP_ECHO === "1") return c.json({ ok: true, devCode: r.code });
-  await sendOtpEmail(c.env, email, r.code);
+  const sent = await sendOtpEmail(c.env, email, r.code);
+  if (!sent.sent && sent.reason === "api_error") {
+    console.error("OTP email failed", sent.message);
+    return c.json({ error: "email_failed" }, 502);
+  }
   return c.json({ ok: true });
 });
 

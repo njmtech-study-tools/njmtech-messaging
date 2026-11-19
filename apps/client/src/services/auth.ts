@@ -60,7 +60,14 @@ export async function authenticate(opts: {
 
   opts.onStep("request");
   const since = Date.now();
-  const start = await api<{ existing: boolean; devCode?: string }>("/auth/start", { method: "POST", json: { email: box.address } });
+  let start: { existing: boolean; devCode?: string };
+  try {
+    start = await api<{ existing: boolean; devCode?: string }>("/auth/start", { method: "POST", json: { email: box.address } });
+  } catch (e) {
+    if (e instanceof ApiError && e.code === "email_failed") throw new Error("Couldn't send the verification email. Try again in a minute.");
+    if (e instanceof ApiError && e.code === "cooldown") throw new Error("A code was just sent. Wait a minute before asking again.");
+    throw e;
+  }
   if (!start.existing && !opts.handle) throw new Error("No account exists for this inbox.");
 
   opts.onStep("waiting");
