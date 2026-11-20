@@ -6,9 +6,16 @@
   "compatibility_date": "2025-09-01",
   "observability": { "enabled": true },
   "durable_objects": {
-    "bindings": [{ "name": "INBOX", "class_name": "UserInbox" }]
+    "bindings": [
+      { "name": "INBOX", "class_name": "UserInbox" },
+      { "name": "FILES", "class_name": "FileBlob" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserInbox"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["UserInbox"] },
+    // Encrypted attachments live in Durable Objects instead of R2 (R2 needs a paid plan).
+    { "tag": "v2", "new_sqlite_classes": ["FileBlob"] }
+  ],
   // The PWA, served from the same origin as the API (build it first: pnpm --filter @njm/client build).
   // Static files are matched first; everything else (/api/*) reaches the Worker. The client uses hash
   // routing, so no SPA fallback is needed.
@@ -16,16 +23,11 @@
   // Replace the ids below with the output of:
   //   wrangler d1 create njm-messaging
   //   wrangler kv namespace create KV
-  //   wrangler r2 bucket create njm-messaging-files
   "d1_databases": [
     { "binding": "DB", "database_name": "njm-messaging", "database_id": "adeeb755-daac-4966-9942-c34a47e588a3", "migrations_dir": "migrations" }
   ],
   "kv_namespaces": [{ "binding": "KV", "id": "9c14b75190124a4eb8ef5004379b6c22" }],
-  // R2 isn't enabled on this account yet (dashboard › R2). Once it is, create the bucket and uncomment:
-  //   wrangler r2 bucket create njm-messaging-files
-  //   wrangler r2 bucket lifecycle add njm-messaging-files expire-files files/ --expire-days 1
-  // "r2_buckets": [{ "binding": "FILES", "bucket_name": "njm-messaging-files" }],
-  // Deletes orphaned encrypted attachments older than 24h, and inbox mail older than 24h.
+  // Clears attachment target rows older than 24h, and inbox mail older than 24h.
   "triggers": { "crons": ["*/30 * * * *"] },
   "vars": {
     "EMAIL_FROM": "Ephemeral <noreply@njmtech.co.za>",

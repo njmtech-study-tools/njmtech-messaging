@@ -11,7 +11,7 @@ Private, anonymous messaging for **Android (Ionic/Capacitor APK)**, **desktop (E
 
 ```
 packages/shared   protocol schemas (zod) + E2E crypto (X25519 → HKDF → XChaCha20-Poly1305, @noble/*)
-apps/server       Cloudflare Worker (Hono) + UserInbox Durable Object, D1, KV, R2
+apps/server       Cloudflare Worker (Hono) + UserInbox/FileBlob Durable Objects, D1, KV
 apps/client       Ionic React + Vite: PWA (service worker) and Capacitor Android project (apps/client/android)
 apps/desktop      Electron shell: serves the client build from app://, tray, badge, launch at login
 ```
@@ -26,7 +26,7 @@ apps/desktop      Electron shell: serves the client build from app://, tray, bad
 | Link codes | KV | 10-min, single-use device-link codes |
 | OTP | KV | SHA-256 of code, 10 min TTL, 5 attempts |
 | Offline messages | Durable Object storage | ciphertext only; deleted on ack, or by an alarm at TTL |
-| Attachments | R2 | ciphertext only; deleted once every target device acks, swept by cron after 24 h |
+| Attachments | FileBlob Durable Object (one per file, 1 MiB chunks) | ciphertext only; deleted once every target device acks, or by the object's alarm after 24 h |
 | Message history | **device IndexedDB only** | plaintext, deleted by disappearing timers |
 
 Sending: the client fetches the recipient's device keys (plus your own other devices), encrypts one envelope per device, and sends them over a WebSocket to its own inbox DO. That DO checks every envelope targets a device of the recipient (or of the sender), then forwards the envelopes to the recipient's inbox DO. That DO pushes live sockets, queues for offline devices and sends a content-free push.
@@ -102,7 +102,6 @@ Create a Cloudflare API token (dashboard › My Profile › API Tokens › *Crea
 - Account › **Workers Scripts** › Edit
 - Account › **D1** › Edit
 - Account › **Workers KV Storage** › Edit
-- Account › **Workers R2 Storage** › Edit (for when R2 is enabled)
 - Account › **Account Settings** › Read
 - User › **Memberships** › Read
 
@@ -121,10 +120,7 @@ Then add it to the repo, along with any optional settings:
 
 `JWT_SECRET` and `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` were generated once and live only in Cloudflare. Deploys never change them, because rotating them would sign everyone out or break push subscriptions.
 
-**R2 (attachments)** isn't enabled on the account yet. Until it is, `/api/files` returns `503 attachments_unavailable` and everything else works. To turn it on: enable R2 in the dashboard, run
-`wrangler r2 bucket create njm-messaging-files` and
-`wrangler r2 bucket lifecycle add njm-messaging-files expire-files files/ --expire-days 1`,
-uncomment `r2_buckets` in `wrangler.jsonc`, and push.
+**Attachments** don't use R2 (it needs a paid plan). Each encrypted file goes into its own SQLite-backed `FileBlob` Durable Object, which the Workers free plan includes. The file key travels end-to-end inside the message, so the server only ever holds ciphertext.
 
 Manual deploy from a laptop (rarely needed): `cd apps/server && pnpm db:migrate:remote && pnpm run deploy`.
 

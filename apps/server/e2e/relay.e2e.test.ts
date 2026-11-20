@@ -238,4 +238,22 @@ describe.skipIf(!BASE)("relay e2e", () => {
     await fetch(api(`/files/${up.id}/ack`), { method: "POST", headers: { Authorization: `Bearer ${bob.token}` } });
     expect((await fetch(api(`/files/${up.id}`), { headers: { Authorization: `Bearer ${bob.token}` } })).status).toBe(404);
   });
+
+  it("round-trips a multi-chunk file byte for byte", async () => {
+    const alice = await signup(`a_${rand()}`);
+    const bob = await signup(`b_${rand()}`);
+    // 3.5 MiB: spans several 1 MiB storage chunks plus a partial one.
+    const blob = new Uint8Array(3.5 * 1024 * 1024);
+    for (let i = 0; i < blob.length; i++) blob[i] = (i * 31 + 7) & 0xff;
+    const res = await fetch(api("/files"), {
+      method: "POST",
+      body: blob,
+      headers: { Authorization: `Bearer ${alice.token}`, "X-File-Targets": bob.deviceId, "Content-Type": "application/octet-stream" },
+    });
+    expect(res.status).toBe(200);
+    const { id } = await res.json();
+    const got = new Uint8Array(await (await fetch(api(`/files/${id}`), { headers: { Authorization: `Bearer ${bob.token}` } })).arrayBuffer());
+    expect(got.length).toBe(blob.length);
+    expect(got.every((b, i) => b === blob[i])).toBe(true);
+  });
 });

@@ -11,13 +11,14 @@ import { checkOtp, consumeOtp, issueOtp } from "./otp";
 import { sendOtpEmail } from "./email";
 import { inboundEmail, sweepMailboxes, tempmail } from "./mailbox";
 import { pushDevice, type PushTarget } from "./push";
+import { FILE_MAX_AGE_MS } from "./file-do";
 import { newId, now, rateLimit, sha256Hex, signJwt, timingSafeEqual, verifyJwt } from "./util";
 
 export { UserInbox } from "./inbox-do";
+export { FileBlob } from "./file-do";
 
 const SESSION_TTL = 180 * 24 * 3600;
 const MAX_DEVICES = 10;
-const FILE_MAX_AGE_MS = 24 * 3600 * 1000;
 
 type Vars = { session: Session };
 const app = new Hono<{ Bindings: Env; Variables: Vars }>().basePath("/api");
@@ -269,7 +270,7 @@ authed.delete("/me", async (c) => {
   const db = c.env.DB;
   await c.env.INBOX.get(c.env.INBOX.idFromName(sub)).purge();
   const { results: files } = await db.prepare("SELECT DISTINCT file_id FROM file_targets WHERE owner_id = ?").bind(sub).all<{ file_id: string }>();
-  if (files.length && c.env.FILES) await c.env.FILES.delete(files.map((f) => `files/${f.file_id}`));
+  await Promise.all(files.map((f) => fileStub(c.env, f.file_id).drop()));
   await db.batch([
     db.prepare("DELETE FROM file_targets WHERE owner_id = ?").bind(sub),
     db.prepare("DELETE FROM devices WHERE user_id = ?").bind(sub),
@@ -356,16 +357,9 @@ authed.post("/push/test", async (c) => {
   return c.json({ ok: result === "ok", result });
 });
 
-/* ------------------------- Encrypted attachments (R2) ------------------------ */
+/* ---------------- Encrypted attachments (one FileBlob DO per file) --------------- */
 
-authed.use("/files/*", async (c, next) => {
-  if (!c.env.FILES) return c.json({ error: "attachments_unavailable" }, 503);
-  await next();
-});
-authed.use("/files", async (c, next) => {
-  if (!c.env.FILES) return c.json({ error: "attachments_unavailable" }, 503);
-  await next();
-});
+const fileStub = (env: Env, id: string) => env.FILES.get(env.FILES.idFromName(id));
 
 authed.post("/files", async (c) => {
   const { sub } = c.get("session");
@@ -374,7 +368,9 @@ authed.post("/files", async (c) => {
   const len = Number(c.req.header("Content-Length") ?? "0");
   if (!len || len > MAX_FILE_BYTES + 64) return c.json({ error: "too_large" }, 413);
   const id = newId(16);
-  await c.env.FILES!.put(`files/${id}`, c.req.raw.body!, { customMetadata: { owner: sub } });
+  const stored = await fileStub(c.env, id).fetch("https://file/", { method: "PUT", body: c.req.raw.body });
+  if (stored.status === 413) return c.json({ error: "too_large" }, 413);
+  if (!stored.ok) return c.json({ error: "upload_failed" }, 400);
   const ts = now();
   await c.env.DB.batch(
     targets.map((d) =>
@@ -389,9 +385,11 @@ authed.get("/files/:id", async (c) => {
   const id = c.req.param("id");
   const t = await c.env.DB.prepare("SELECT 1 FROM file_targets WHERE file_id = ? AND device_id = ?").bind(id, did).first();
   if (!t) return c.json({ error: "not_found" }, 404);
-  const obj = await c.env.FILES!.get(`files/${id}`);
-  if (!obj) return c.json({ error: "expired" }, 410);
-  return new Response(obj.body, { headers: { "Content-Type": "application/octet-stream", "Cache-Control": "no-store" } });
+  const blob = await fileStub(c.env, id).fetch("https://file/");
+  if (!blob.ok) return c.json({ error: "expired" }, 410);
+  return new Response(blob.body, {
+    headers: { "Content-Type": "application/octet-stream", "Content-Length": blob.headers.get("Content-Length") ?? "", "Cache-Control": "no-store" },
+  });
 });
 
 /** Called after a device has downloaded + decrypted a blob. Deleted once every target device is done. */
@@ -402,7 +400,7 @@ authed.post("/files/:id/ack", async (c) => {
   await db.prepare("UPDATE file_targets SET done = 1 WHERE file_id = ? AND device_id = ?").bind(id, did).run();
   const pending = await db.prepare("SELECT COUNT(*) AS n FROM file_targets WHERE file_id = ? AND done = 0").bind(id).first<number>("n");
   if (!pending) {
-    await c.env.FILES!.delete(`files/${id}`);
+    await fileStub(c.env, id).drop();
     await db.prepare("DELETE FROM file_targets WHERE file_id = ?").bind(id).run();
   }
   return c.json({ ok: true });
@@ -428,14 +426,14 @@ async function handleWebSocket(req: Request, env: Env): Promise<Response> {
 
 /* ------------------------------ Scheduled sweep ----------------------------- */
 
+/** FileBlob alarms delete the ciphertext after 24h; this clears the matching target rows. */
 async function sweepFiles(env: Env) {
-  if (!env.FILES) return;
   const cutoff = now() - FILE_MAX_AGE_MS;
   const { results } = await env.DB.prepare("SELECT DISTINCT file_id FROM file_targets WHERE created_at < ? LIMIT 500")
     .bind(cutoff)
     .all<{ file_id: string }>();
   if (!results.length) return;
-  await env.FILES.delete(results.map((r) => `files/${r.file_id}`));
+  await Promise.all(results.map((r) => fileStub(env, r.file_id).drop()));
   await env.DB.batch(results.map((r) => env.DB.prepare("DELETE FROM file_targets WHERE file_id = ?").bind(r.file_id)));
 }
 

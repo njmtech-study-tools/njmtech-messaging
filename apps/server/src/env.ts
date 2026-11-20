@@ -1,10 +1,11 @@
+import type { FileBlob } from "./file-do";
 import type { UserInbox } from "./inbox-do";
 
 export interface Env {
   DB: D1Database;
   KV: KVNamespace;
-  /** Optional until R2 is enabled on the account; attachment routes return 503 without it. */
-  FILES?: R2Bucket;
+  /** Encrypted attachments, one object per file (see file-do.ts). */
+  FILES: DurableObjectNamespace<FileBlob>;
   INBOX: DurableObjectNamespace<UserInbox>;
   JWT_SECRET: string;
   RESEND_API_KEY?: string;
