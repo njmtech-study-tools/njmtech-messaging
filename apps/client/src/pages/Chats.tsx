@@ -9,7 +9,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../db";
 import { useSession } from "../session";
 import type { ConnectionStatus } from "../services/messenger";
-import { avatarColor, shortTime } from "../util";
+import { avatarColor, shortTime, truncatePreview } from "../util";
 
 export function useConnection(): ConnectionStatus {
   const { messenger } = useSession();
@@ -90,7 +90,7 @@ export default function Chats() {
                         @{c.handle}{" "}
                         {c.timer > 0 && <IonIcon icon={timerOutline} style={{ verticalAlign: "-2px", opacity: 0.6 }} />}
                       </h2>
-                      <p>{c.lastText || " "}</p>
+                      <p>{truncatePreview(c.lastText) || " "}</p>
                     </IonLabel>
                     <div slot="end" style={{ textAlign: "right" }}>
                       <IonNote style={{ fontSize: 12 }}>{c.lastText ? shortTime(c.lastAt) : ""}</IonNote>

@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { extractOtp } from "./services/tempmail";
 import { db, sweepExpired } from "./db";
-import { remaining } from "./util";
+import { remaining, truncatePreview } from "./util";
 
 describe("tempmail", () => {
   it("extracts codes from subjects", () => {
@@ -50,5 +50,17 @@ describe("sweep keeps chat previews honest", () => {
     await db.messages.put({ ...base, id: "n2", text: "gone too", sentAt: 3, expiresAt: 10 });
     await sweepExpired(20);
     expect((await db.contacts.get("p2"))!.lastText).toBe("");
+  });
+});
+
+describe("truncatePreview", () => {
+  it("keeps short text and cuts long text at 50 characters with ...", () => {
+    expect(truncatePreview("hello")).toBe("hello");
+    expect(truncatePreview("x".repeat(50))).toBe("x".repeat(50));
+    expect(truncatePreview("x".repeat(51))).toBe("x".repeat(50) + "...");
+  });
+  it("flattens newlines and never splits an emoji", () => {
+    expect(truncatePreview("line one\n\nline two")).toBe("line one line two");
+    expect(truncatePreview("😀".repeat(60))).toBe("😀".repeat(50) + "...");
   });
 });

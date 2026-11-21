@@ -22,6 +22,16 @@ export function remaining(expiresAt: number, now = Date.now()) {
   return `${Math.round(s / 86400)}d`;
 }
 
+/**
+ * Chat-list preview: first line of whitespace collapsed, cut to `max` characters with "..."
+ * when longer. Counts code points so an emoji is never split in half.
+ */
+export function truncatePreview(text: string, max = 50) {
+  const flat = text.replace(/\s+/g, " ").trim();
+  const chars = Array.from(flat);
+  return chars.length > max ? chars.slice(0, max).join("").trimEnd() + "..." : flat;
+}
+
 export function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
